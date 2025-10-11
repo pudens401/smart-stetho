@@ -27,7 +27,7 @@
     <input id="brokerUrl" value="wss://test.mosquitto.org:8081/mqtt" />
   </label>
   <label>topic
-    <input id="topic" value="demo/heartbeat" />
+    <input id="topic" value="stetho/heartbeat" />
   </label>
 
   <div class="row">
@@ -48,7 +48,7 @@
     <button id="disconnectBtn" disabled>disconnect</button>
   </div>
 
-  <div id="valueDisplay">--</div>
+  <div id="valueDisplay" style="display:flex; overflow-x:auto; gap:8px; min-height:3.5rem; background:#fff; border-radius:6px; border:1px solid #eee; padding:8px 0;">--</div>
   <div id="warning"></div>
 
   <canvas id="chart"></canvas>
@@ -119,8 +119,15 @@
       statusEl.className = good ? 'good' : 'bad';
     }
 
+    // Store last 10 values for display
+    const lastValues = [];
     function updateValue(bpm) {
-      valueDisplay.textContent = bpm;
+      // Update last 10 values
+      lastValues.push(bpm);
+      if (lastValues.length > 10) lastValues.shift();
+      // Render values as horizontally scrollable
+      valueDisplay.innerHTML = lastValues.map(v => `<span style="min-width:2.5rem;display:inline-block;text-align:center;">${v}</span>`).join('');
+
       const low = parseFloat(lowTh.value);
       const high = parseFloat(highTh.value);
       if (bpm < low) {
