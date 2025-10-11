@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mqtt heartbeat monitor</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 24px; background:#fafafa }
+    h1 { font-size: 1.25rem; margin-bottom: 12px; }
+    label { display:block; margin-top:10px; font-weight:600; }
+    input, button { padding:8px; margin-top:6px; width:100%; box-sizing:border-box; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+    #chart { width:100%; height:300px; margin-top:20px; }
+    #valueDisplay { font-size:3rem; text-align:center; margin-top:16px; }
+    #warning { text-align:center; margin-top:10px; font-weight:700; color:#d32f2f; font-size:1.1rem; }
+    .status { font-size:0.9rem; margin-top:8px; color:#555; }
+    button { cursor:pointer; }
+    .good { color:#2e7d32 }
+    .bad { color:#d32f2f }
+  </style>
+</head>
+<body>
+  <h1>mqtt heartbeat monitor</h1>
+
+  <label>broker (ws/wss URL)
+    <input id="brokerUrl" value="wss://test.mosquitto.org:8081/mqtt" />
+  </label>
+  <label>topic
+    <input id="topic" value="demo/heartbeat" />
+  </label>
+
+  <div class="row">
+    <div class="col">
+      <label>low threshold
+        <input id="lowTh" type="number" value="60" />
+      </label>
+    </div>
+    <div class="col">
+      <label>high threshold
+        <input id="highTh" type="number" value="120" />
+      </label>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button id="connectBtn">connect</button>
+    <button id="disconnectBtn" disabled>disconnect</button>
+  </div>
+
+  <div id="valueDisplay">--</div>
+  <div id="warning"></div>
+
+  <canvas id="chart"></canvas>
+
+  <div class="status">status: <span id="status">disconnected</span></div>
+
+  <!-- mqtt.js and chart.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const brokerUrl = document.getElementById('brokerUrl');
+    const topic = document.getElementById('topic');
+    const lowTh = document.getElementById('lowTh');
+    const highTh = document.getElementById('highTh');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const valueDisplay = document.getElementById('valueDisplay');
+    const warning = document.getElementById('warning');
+    const statusEl = document.getElementById('status');
+    let client = null;
+
+    // restore settings from localStorage
+    const saved = JSON.parse(localStorage.getItem('hbSettings') || '{}');
+    if (saved.brokerUrl) brokerUrl.value = saved.brokerUrl;
+    if (saved.topic) topic.value = saved.topic;
+    if (saved.lowTh) lowTh.value = saved.lowTh;
+    if (saved.highTh) highTh.value = saved.highTh;
+
+    // persist settings on change
+    [brokerUrl, topic, lowTh, highTh].forEach(el =>
+      el.addEventListener('change', () => {
+        localStorage.setItem('hbSettings', JSON.stringify({
+          brokerUrl: brokerUrl.value,
+          topic: topic.value,
+          lowTh: lowTh.value,
+          highTh: highTh.value
+        }));
+      })
+    );
+
+    // Chart.js setup
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Heart rate (BPM)',
+          data: [],
+          borderColor: '#1976d2',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'time' } },
+          y: { min: 40, max: 180, title: { display: true, text: 'bpm' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    function setStatus(s, good) {
+      statusEl.textContent = s;
+      statusEl.className = good ? 'good' : 'bad';
+    }
+
+    function updateValue(bpm) {
+      valueDisplay.textContent = bpm;
+      const low = parseFloat(lowTh.value);
+      const high = parseFloat(highTh.value);
+      if (bpm < low) {
+        warning.textContent = `⚠️ Low heart rate (${bpm})`;
+      } else if (bpm > high) {
+        warning.textContent = `⚠️ High heart rate (${bpm})`;
+      } else {
+        warning.textContent = '';
+      }
+
+      const time = new Date().toLocaleTimeString();
+      chart.data.labels.push(time);
+      chart.data.datasets[0].data.push(bpm);
+      if (chart.data.labels.length > 30) { // keep 30 points
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update();
+    }
+
+    connectBtn.addEventListener('click', () => {
+      if (client) return;
+      const url = brokerUrl.value.trim();
+      if (!url) return alert('Enter broker URL');
+
+      setStatus('connecting...');
+      client = mqtt.connect(url, {
+        clientId: 'hb-' + Math.random().toString(16).slice(2,10),
+        keepalive: 30,
+        reconnectPeriod: 2000
+      });
+
+      client.on('connect', () => {
+        setStatus('connected', true);
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        client.subscribe(topic.value.trim(), err => {
+          if (err) console.error('subscribe error', err);
+        });
+      });
+
+      client.on('message', (t, payload) => {
+        const msg = new TextDecoder().decode(payload).trim();
+        const bpm = parseFloat(msg);
+        if (!isNaN(bpm)) updateValue(bpm);
+      });
+
+      client.on('reconnect', () => setStatus('reconnecting...'));
+      client.on('close', () => {
+        setStatus('disconnected');
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        client = null;
+      });
+      client.on('error', err => console.error('mqtt error', err));
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (client) {
+        client.end();
+        setStatus('disconnected');
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        client = null;
+      }
+    });
+  </script>
+</body>
+</html>
