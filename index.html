@@ -3,57 +3,124 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>mqtt heartbeat monitor</title>
+  <title>MQTT Heartbeat Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 24px; background:#fafafa }
-    h1 { font-size: 1.25rem; margin-bottom: 12px; }
-    label { display:block; margin-top:10px; font-weight:600; }
-    input, button { padding:8px; margin-top:6px; width:100%; box-sizing:border-box; }
-    .row { display:flex; gap:8px; }
-    .col { flex:1; }
-    #chart { width:100%; height:300px; margin-top:20px; }
-    #valueDisplay { font-size:3rem; text-align:center; margin-top:16px; }
-    #warning { text-align:center; margin-top:10px; font-weight:700; color:#d32f2f; font-size:1.1rem; }
-    .status { font-size:0.9rem; margin-top:8px; color:#555; }
-    button { cursor:pointer; }
-    .good { color:#2e7d32 }
-    .bad { color:#d32f2f }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+    }
+    .pulse-animation {
+      animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+    #valueDisplay::-webkit-scrollbar {
+      height: 6px;
+    }
+    #valueDisplay::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    #valueDisplay::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 10px;
+    }
+    #valueDisplay::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
   </style>
 </head>
-<body>
-  <h1>mqtt heartbeat monitor</h1>
-
-  <label>broker (ws/wss URL)
-    <input id="brokerUrl" value="wss://test.mosquitto.org:8081/mqtt" />
-  </label>
-  <label>topic
-    <input id="topic" value="stetho/heartbeat" />
-  </label>
-
-  <div class="row">
-    <div class="col">
-      <label>low threshold
-        <input id="lowTh" type="number" value="60" />
-      </label>
+<body class="bg-gradient-to-br from-blue-50 via-white to-red-50 min-h-screen">
+  <div class="max-w-4xl mx-auto p-6 md:p-8">
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-red-500">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <svg class="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+          </svg>
+          <h1 class="text-2xl md:text-3xl font-bold text-gray-800">MQTT Heartbeat Monitor</h1>
+        </div>
+        <div class="text-sm px-3 py-1 rounded-full" id="statusBadge">
+          <span class="font-semibold">Status:</span> <span id="status" class="font-bold">disconnected</span>
+        </div>
+      </div>
     </div>
-    <div class="col">
-      <label>high threshold
-        <input id="highTh" type="number" value="120" />
-      </label>
+
+    <!-- Configuration Card -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+      <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Configuration
+      </h2>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Broker (ws/wss URL)</label>
+          <input id="brokerUrl" value="wss://test.mosquitto.org:8081/mqtt" 
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Topic</label>
+          <input id="topic" value="stetho/heartbeat" 
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Low Threshold</label>
+            <input id="lowTh" type="number" value="60" 
+              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">High Threshold</label>
+            <input id="highTh" type="number" value="120" 
+              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <button id="connectBtn" 
+            class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg">
+            Connect
+          </button>
+          <button id="disconnectBtn" disabled 
+            class="px-6 py-3 bg-gray-400 text-white font-semibold rounded-lg cursor-not-allowed opacity-60">
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live BPM Display -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+      <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+        </svg>
+        Live Heartbeat Values (Last 10)
+      </h2>
+      <div id="valueDisplay" 
+        class="flex overflow-x-auto gap-3 min-h-[4rem] bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200 p-4 items-center justify-center">
+        <span class="text-4xl font-bold text-gray-400">--</span>
+      </div>
+      <div id="warning" class="text-center mt-4 text-lg font-bold"></div>
+    </div>
+
+    <!-- Chart Card -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+      <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        Heartbeat Trend
+      </h2>
+      <canvas id="chart" class="w-full" style="height: 300px;"></canvas>
     </div>
   </div>
-
-  <div class="row" style="margin-top:12px">
-    <button id="connectBtn">connect</button>
-    <button id="disconnectBtn" disabled>disconnect</button>
-  </div>
-
-  <div id="valueDisplay" style="display:flex; overflow-x:auto; gap:8px; min-height:3.5rem; background:#fff; border-radius:6px; border:1px solid #eee; padding:8px 0;">--</div>
-  <div id="warning"></div>
-
-  <canvas id="chart"></canvas>
-
-  <div class="status">status: <span id="status">disconnected</span></div>
 
   <!-- mqtt.js and chart.js -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -116,7 +183,14 @@
 
     function setStatus(s, good) {
       statusEl.textContent = s;
-      statusEl.className = good ? 'good' : 'bad';
+      const badge = document.getElementById('statusBadge');
+      if (good) {
+        statusEl.className = 'text-green-600';
+        badge.className = 'text-sm px-3 py-1 rounded-full bg-green-100 border border-green-300';
+      } else {
+        statusEl.className = 'text-red-600';
+        badge.className = 'text-sm px-3 py-1 rounded-full bg-red-100 border border-red-300';
+      }
     }
 
     // Store last 10 values for display
@@ -125,17 +199,26 @@
       // Update last 10 values
       lastValues.push(bpm);
       if (lastValues.length > 10) lastValues.shift();
-      // Render values as horizontally scrollable
-      valueDisplay.innerHTML = lastValues.map(v => `<span style="min-width:2.5rem;display:inline-block;text-align:center;">${v}</span>`).join('');
+      
+      // Render values as horizontally scrollable with Tailwind styling
+      valueDisplay.innerHTML = lastValues.map(v => 
+        `<span class="min-w-[3rem] text-4xl font-bold text-red-500 pulse-animation inline-block text-center px-2">${v}</span>`
+      ).join('');
+      
+      // Auto-scroll to the right to show latest value
+      valueDisplay.scrollLeft = valueDisplay.scrollWidth;
 
       const low = parseFloat(lowTh.value);
       const high = parseFloat(highTh.value);
       if (bpm < low) {
         warning.textContent = `⚠️ Low heart rate (${bpm})`;
+        warning.className = 'text-center mt-4 text-lg font-bold text-yellow-600 bg-yellow-50 py-2 px-4 rounded-lg border border-yellow-300';
       } else if (bpm > high) {
         warning.textContent = `⚠️ High heart rate (${bpm})`;
+        warning.className = 'text-center mt-4 text-lg font-bold text-red-600 bg-red-50 py-2 px-4 rounded-lg border border-red-300';
       } else {
         warning.textContent = '';
+        warning.className = 'text-center mt-4 text-lg font-bold';
       }
 
       const time = new Date().toLocaleTimeString();
@@ -163,7 +246,9 @@
       client.on('connect', () => {
         setStatus('connected', true);
         connectBtn.disabled = true;
+        connectBtn.className = 'px-6 py-3 bg-gray-400 text-white font-semibold rounded-lg cursor-not-allowed opacity-60';
         disconnectBtn.disabled = false;
+        disconnectBtn.className = 'px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg cursor-pointer';
         client.subscribe(topic.value.trim(), err => {
           if (err) console.error('subscribe error', err);
         });
@@ -179,7 +264,9 @@
       client.on('close', () => {
         setStatus('disconnected');
         connectBtn.disabled = false;
+        connectBtn.className = 'px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg cursor-pointer';
         disconnectBtn.disabled = true;
+        disconnectBtn.className = 'px-6 py-3 bg-gray-400 text-white font-semibold rounded-lg cursor-not-allowed opacity-60';
         client = null;
       });
       client.on('error', err => console.error('mqtt error', err));
@@ -190,7 +277,9 @@
         client.end();
         setStatus('disconnected');
         connectBtn.disabled = false;
+        connectBtn.className = 'px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg cursor-pointer';
         disconnectBtn.disabled = true;
+        disconnectBtn.className = 'px-6 py-3 bg-gray-400 text-white font-semibold rounded-lg cursor-not-allowed opacity-60';
         client = null;
       }
     });
